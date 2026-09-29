@@ -1,0 +1,120 @@
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  height: 56px;
+  line-height: 56px;
+}
+
+.app-content {
+  padding: 12px 16px 32px;
+}
+
+.field-label {
+  font-size: 12px;
+  margin-bottom: 4px;
+  opacity: 0.85;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+/* Filter sidebar stays in view while scrolling the table on wide screens */
+@media (min-width: 992px) {
+  .filter-card {
+    position: sticky;
+    top: 68px;
+    max-height: calc(100vh - 80px);
+    overflow: auto;
+  }
+}
+
+.opt-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.quick-tag {
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  margin-inline-end: 0;
+}
+
+.click-tag {
+  cursor: pointer;
+}
+
+.id-cell {
+  cursor: pointer;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.id-cell:hover {
+  text-decoration: underline;
+}
+
+.chip {
+  margin-inline-end: 0;
+  max-width: 100%;
+  white-space: normal;
+  word-break: break-all;
+}
+
+.log-row {
+  cursor: pointer;
+}
+
+.row-error > td {
+  background: rgba(255, 77, 79, 0.06);
+}
+
+.row-selected > td {
+  background: rgba(22, 119, 255, 0.12) !important;
+}
+
+.json-wrap {
+  position: relative;
+}
+
+.json-copy {
+  position: absolute !important;
+  top: 6px;
+  right: 10px;
+  margin: 0 !important;
+  z-index: 1;
+}
+
+.json-block {
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  border-radius: 6px;
+  background: rgba(128, 128, 128, 0.08);
+  border: 1px solid rgba(128, 128, 128, 0.2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.tooltip-pre {
+  margin: 0;
+  font-size: 11px;
+  white-space: pre-wrap;
+}
