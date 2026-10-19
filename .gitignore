@@ -5,3 +5,7 @@ out
 .vercel
 .DS_Store
 next-env.d.ts
+
+# IDE and local tooling
+.idea/
+.claude/launch.json
