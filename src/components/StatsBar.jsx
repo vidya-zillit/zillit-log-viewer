@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Card, Col, Row, Statistic, Tooltip } from 'antd';
 
-export default function StatsBar({ logs, loadedCount, total, onQuickFilter }) {
+export default function StatsBar({ logs, loadedCount, total, serverFiltered, onQuickFilter }) {
   const stats = useMemo(() => {
     const users = new Set();
     const devices = new Set();
@@ -23,7 +23,7 @@ export default function StatsBar({ logs, loadedCount, total, onQuickFilter }) {
   }, [logs]);
 
   const items = [
-    { title: 'On server', value: total ?? '—' },
+    { title: serverFiltered ? 'Server matches' : 'On server', value: total ?? '—' },
     { title: 'Loaded', value: loadedCount },
     { title: 'Matching', value: logs.length, color: '#1677ff' },
     { title: 'With error', value: stats.errors, color: stats.errors ? '#cf1322' : undefined, quick: 'hasError' },

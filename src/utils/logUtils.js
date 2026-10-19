@@ -207,19 +207,36 @@ export function applyFacetFilters(logs, facets) {
  */
 export function computeFacetOptions(logs, facets) {
   const active = activeFacets(facets);
+
+  // One pass up front: how many active facets each log fails, and which one when it fails
+  // exactly one. A log then counts toward facet K when it fails none, or fails only K —
+  // the same as re-checking every other facet per K, without the facets × logs × active cost.
+  const misses = new Uint8Array(logs.length);
+  const missKey = new Array(logs.length);
+  if (active.length) {
+    logs.forEach((log, i) => {
+      for (const [k, state] of active) {
+        if (matchesFacet(log, k, state)) continue;
+        missKey[i] = k;
+        if (++misses[i] > 1) break;
+      }
+    });
+  }
+
   const result = {};
   for (const { key } of FACETS) {
-    const others = active.filter(([k]) => k !== key);
     const counts = new Map();
-    for (const log of logs) {
-      if (others.length && !others.every(([k, s]) => matchesFacet(log, k, s))) continue;
+    logs.forEach((log, i) => {
+      if (misses[i] > 1 || (misses[i] === 1 && missKey[i] !== key)) return;
       const v = facetValue(log, key);
       counts.set(v, (counts.get(v) || 0) + 1);
-    }
+    });
     for (const v of facets[key]?.values ?? []) if (!counts.has(v)) counts.set(v, 0);
+    // `label` lets the option objects go straight into <Select options>. Ties are ordered
+    // with < rather than localeCompare, which is slow over thousands of unique IDs.
     result[key] = [...counts.entries()]
-      .map(([value, count]) => ({ value, count }))
-      .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+      .map(([value, count]) => ({ value, label: value, count }))
+      .sort((a, b) => b.count - a.count || (a.value < b.value ? -1 : a.value > b.value ? 1 : 0));
   }
   return result;
 }

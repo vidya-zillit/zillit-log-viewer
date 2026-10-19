@@ -2,6 +2,8 @@ import { useMemo } from 'react';
 import { Button, Flex, Progress, Segmented, Space, Table, Tag, Tooltip, Typography } from 'antd';
 import { EyeOutlined, FilterOutlined } from '@ant-design/icons';
 import { EMPTY, facetLabel, formatTime, fromNow, GROUP_BYS, groupLogs, PLATFORM_COLORS } from '../utils/logUtils';
+import { useTableHeight } from '../hooks/useTableHeight';
+import { Clip } from './LogCells';
 
 const { Text } = Typography;
 
@@ -10,6 +12,7 @@ export default function GroupedView({ logs, groupBy, onGroupByChange, onApplyGro
   const def = GROUP_BYS.find((g) => g.key === groupBy) ?? GROUP_BYS[0];
   const groups = useMemo(() => groupLogs(logs, def.fields), [logs, def]);
   const max = groups[0]?.count ?? 1;
+  const height = useTableHeight(440);
 
   const columns = [
     ...def.fields.map((field, i) => ({
@@ -20,9 +23,9 @@ export default function GroupedView({ logs, groupBy, onGroupByChange, onApplyGro
         g.values[i] === EMPTY ? (
           <Text type="secondary">{EMPTY}</Text>
         ) : (
-          <Text className="mono" ellipsis={{ tooltip: g.values[i] }} style={{ maxWidth: i === 0 ? 340 : 260 }}>
+          <Clip className="mono" title={g.values[i]}>
             {g.values[i]}
-          </Text>
+          </Clip>
         ),
     })),
     {
@@ -60,7 +63,7 @@ export default function GroupedView({ logs, groupBy, onGroupByChange, onApplyGro
       dataIndex: 'first',
       width: 140,
       sorter: (a, b) => (a.first ?? 0) - (b.first ?? 0),
-      render: (t) => <Tooltip title={formatTime(t)}>{formatTime(t, 'MM-DD HH:mm:ss')}</Tooltip>,
+      render: (t) => <span title={formatTime(t)}>{formatTime(t, 'MM-DD HH:mm:ss')}</span>,
     },
     {
       title: 'Last seen',
@@ -68,12 +71,10 @@ export default function GroupedView({ logs, groupBy, onGroupByChange, onApplyGro
       width: 140,
       sorter: (a, b) => (a.last ?? 0) - (b.last ?? 0),
       render: (t) => (
-        <Tooltip title={formatTime(t)}>
+        <div title={formatTime(t)}>
           <div>{formatTime(t, 'MM-DD HH:mm:ss')}</div>
-          <Text type="secondary" style={{ fontSize: 11 }}>
-            {fromNow(t)}
-          </Text>
-        </Tooltip>
+          <div className="cell-sub">{fromNow(t)}</div>
+        </div>
       ),
     },
     {
@@ -102,11 +103,13 @@ export default function GroupedView({ logs, groupBy, onGroupByChange, onApplyGro
         <Text type="secondary">{groups.length.toLocaleString()} groups</Text>
       </Flex>
       <Table
+        className="log-table"
         rowKey="key"
         size="small"
+        virtual
         columns={columns}
         dataSource={groups}
-        scroll={{ x: 1200 }}
+        scroll={{ x: columns.reduce((sum, c) => sum + c.width, 0), y: height }}
         pagination={{ defaultPageSize: 50, showSizeChanger: true, pageSizeOptions: [25, 50, 100, 200] }}
       />
     </>

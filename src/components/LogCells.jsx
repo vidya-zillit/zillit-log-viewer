@@ -1,24 +1,38 @@
-import { Tag, Tooltip, Typography } from 'antd';
+import { Tag, Typography } from 'antd';
 import { CATEGORY_COLORS, PLATFORM_COLORS, statusColor } from '../utils/logUtils';
 
 const { Text } = Typography;
 
+export const Dash = () => <Text type="secondary">—</Text>;
+
+/**
+ * Single-line text clipped with an ellipsis and a native tooltip. Table cells use this
+ * instead of antd Tooltip / Typography ellipsis, which mount a trigger and a
+ * ResizeObserver per cell and make large pages hang.
+ */
+export function Clip({ title, className, style, children }) {
+  return (
+    <div className={className ? `clip ${className}` : 'clip'} title={title} style={style}>
+      {children}
+    </div>
+  );
+}
+
 /** Tag that adds a filter when clicked (without opening the row). */
 export function FilterTag({ facetKey, value, color, children, onAddFilter }) {
-  if (!value && value !== 0) return <Text type="secondary">—</Text>;
+  if (!value && value !== 0) return <Dash />;
   return (
-    <Tooltip title="Click to filter · Alt+click to exclude" mouseEnterDelay={0.6}>
-      <Tag
-        color={color}
-        className="click-tag"
-        onClick={(e) => {
-          e.stopPropagation();
-          onAddFilter(facetKey, String(value), e.altKey);
-        }}
-      >
-        {children ?? value}
-      </Tag>
-    </Tooltip>
+    <Tag
+      color={color}
+      className="click-tag"
+      title="Click to filter · Alt+click to exclude"
+      onClick={(e) => {
+        e.stopPropagation();
+        onAddFilter(facetKey, String(value), e.altKey);
+      }}
+    >
+      {children ?? value}
+    </Tag>
   );
 }
 
@@ -50,5 +64,5 @@ export function StatusTag({ log, onAddFilter }) {
       </FilterTag>
     );
   }
-  return <Text type="secondary">—</Text>;
+  return <Dash />;
 }
