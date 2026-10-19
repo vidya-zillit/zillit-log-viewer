@@ -4,9 +4,11 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } f
 import { Alert, App as AntApp, Card, Col, ConfigProvider, Empty, Layout, Row, Space, Switch, Tabs, Tag, theme, Typography } from 'antd';
 import { BarsOutlined, GroupOutlined, MoonOutlined, SunOutlined } from '@ant-design/icons';
 import ConnectionBar from './ConnectionBar';
+import ServerQueryBar from './ServerQueryBar';
 import FilterPanel from './FilterPanel';
 import ActiveFilters from './ActiveFilters';
 import StatsBar from './StatsBar';
+import CoverageNotice from './CoverageNotice';
 import LogTable from './LogTable';
 import GroupedView from './GroupedView';
 import LogDetailDrawer from './LogDetailDrawer';
@@ -14,6 +16,7 @@ import { useLogs } from '../hooks/useLogs';
 import { usePersistentState } from '../hooks/usePersistentState';
 import { describeError } from '../api/logsApi';
 import { cleanToken } from '../utils/jwt';
+import { countServerQuery, createEmptyServerQuery, hasTimeRange, MAX_LIMIT, RANGE_LOAD_CAP } from '../config/serverQuery';
 import {
   applyBaseFilters,
   applyFacetFilters,
@@ -38,12 +41,18 @@ function LogViewer({ environments, dark, onToggleDark }) {
   const [tab, setTab] = usePersistentState('lv.tab', 'logs');
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [filters, setFilters] = useState(createEmptyFilters);
+  const [serverQuery, setServerQuery] = useState(createEmptyServerQuery);
   const [selectedId, setSelectedId] = useState(null);
   const [error, setError] = useState(null);
 
   const store = useLogs();
   const token = cleanToken(rawToken);
-  const conn = useMemo(() => ({ envKey, token, limit }), [envKey, token, limit]);
+  // After a date-range fetch, further pages (load more, auto-refresh) also use the API
+  // maximum; the chosen page size applies to everything else.
+  const appliedRange = Boolean(store.applied?.params.startDate || store.applied?.params.endDate);
+  const pagingLimit = appliedRange ? MAX_LIMIT : limit;
+  const conn = useMemo(() => ({ envKey, token, limit: pagingLimit }), [envKey, token, pagingLimit]);
+  const rangeMode = hasTimeRange(serverQuery);
 
   /* ---------------- filtering ---------------- */
 
@@ -105,10 +114,22 @@ function LogViewer({ environments, dark, onToggleDark }) {
     [token, message],
   );
 
+  // A date range loads the whole range (up to RANGE_LOAD_CAP), ignoring the page size;
+  // otherwise Fetch loads one page and Load more / Load all go further back.
   const onFetch = () =>
     run(async () => {
-      const res = await store.fetchFirst(conn);
-      message.success(`Fetched ${res.received} of ${res.total.toLocaleString()} logs`);
+      if (hasTimeRange(serverQuery)) {
+        const res = await store.fetchAll({ envKey, token, query: serverQuery, maxLogs: RANGE_LOAD_CAP });
+        if (res.stalled) message.warning('Stopped: the server kept returning already-loaded logs.');
+        else if (res.capped) {
+          message.warning(
+            `Loaded the newest ${res.loaded.toLocaleString()} of ${res.total.toLocaleString()} logs in range (limit ${RANGE_LOAD_CAP.toLocaleString()}). Narrow the range or add filters, or use Load more.`,
+          );
+        } else message.success(`Loaded all ${res.loaded.toLocaleString()} logs in range (${res.requests} request${res.requests === 1 ? '' : 's'})`);
+        return;
+      }
+      const res = await store.fetchFirst({ envKey, token, limit, query: serverQuery });
+      message.success(`Fetched ${res.received} of ${res.total.toLocaleString()} ${countServerQuery(serverQuery) ? 'matching ' : ''}logs`);
     });
 
   const onLoadMore = () =>
@@ -197,6 +218,7 @@ function LogViewer({ environments, dark, onToggleDark }) {
   const openLog = useCallback((log) => setSelectedId(log.id), []);
 
   const env = getEnvironment(envKey);
+  const isServerFiltered = Boolean(store.applied && Object.keys(store.applied.params).length);
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -245,11 +267,35 @@ function LogViewer({ environments, dark, onToggleDark }) {
             onExport={onExport}
             onImport={onImport}
             exportCount={filtered.length}
+            serverFiltered={isServerFiltered}
+            rangeMode={rangeMode}
+          />
+
+          <ServerQueryBar
+            draft={serverQuery}
+            onChange={setServerQuery}
+            applied={store.applied}
+            logs={store.logs}
+            onApply={onFetch}
+            busy={store.status !== 'idle'}
+            hasToken={Boolean(token)}
           />
 
           {error && <Alert type="error" showIcon closable message={error} onClose={() => setError(null)} />}
 
-          <StatsBar logs={filtered} loadedCount={store.logs.length} total={store.total} onQuickFilter={toggleQuick} />
+          <StatsBar logs={filtered} loadedCount={store.logs.length} total={store.total} serverFiltered={isServerFiltered} onQuickFilter={toggleQuick} />
+
+          {store.status !== 'loadingAll' && (
+            <CoverageNotice
+              logs={store.logs}
+              total={store.total}
+              limit={pagingLimit}
+              applied={store.applied}
+              busy={store.status !== 'idle'}
+              onLoadMore={onLoadMore}
+              onLoadAll={onLoadAll}
+            />
+          )}
 
           <Row gutter={[12, 12]}>
             <Col xs={24} lg={7} xl={6} xxl={5}>
@@ -285,6 +331,7 @@ function LogViewer({ environments, dark, onToggleDark }) {
                 ) : tab === 'logs' ? (
                   <LogTable
                     logs={filtered}
+                    loadedCount={store.logs.length}
                     loading={store.status === 'loading'}
                     onOpen={openLog}
                     onAddFilter={addFilter}

@@ -1,31 +1,37 @@
 import { useMemo } from 'react';
-import { Table, Tooltip, Typography } from 'antd';
+import { Table, Typography } from 'antd';
 import { formatTime, formatUtc, fromNow } from '../utils/logUtils';
-import { CategoryTag, FilterTag, PlatformTag, StatusTag } from './LogCells';
-import JsonBlock from './JsonBlock';
+import { useTableHeight } from '../hooks/useTableHeight';
+import { CategoryTag, Clip, Dash, FilterTag, PlatformTag, StatusTag } from './LogCells';
 
 const { Text } = Typography;
 
 const byString = (key) => (a, b) => (a[key] || '').localeCompare(b[key] || '');
 
 function IdCell({ facetKey, value, onAddFilter }) {
-  if (!value) return <Text type="secondary">—</Text>;
+  if (!value) return <Dash />;
   return (
-    <Tooltip title={`${value} — click to filter`}>
-      <Text
-        className="id-cell"
-        onClick={(e) => {
-          e.stopPropagation();
-          onAddFilter(facetKey, value, e.altKey);
-        }}
-      >
-        {value.length > 10 ? `…${value.slice(-8)}` : value}
-      </Text>
-    </Tooltip>
+    <Text
+      className="id-cell"
+      title={`${value} — click to filter · Alt+click to exclude`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onAddFilter(facetKey, value, e.altKey);
+      }}
+    >
+      {value.length > 10 ? `…${value.slice(-8)}` : value}
+    </Text>
   );
 }
 
-export default function LogTable({ logs, loading, onOpen, onAddFilter, selectedId }) {
+/**
+ * Virtualised: only the rows in view are mounted, so a 500-row page costs about the same
+ * as a 20-row one. Cells stick to plain elements with native `title` tooltips for the same
+ * reason. The raw JSON that used to expand inline is in the detail drawer (click a row).
+ */
+export default function LogTable({ logs, loadedCount, loading, onOpen, onAddFilter, selectedId }) {
+  const height = useTableHeight();
+
   const columns = useMemo(
     () => [
       {
@@ -36,20 +42,10 @@ export default function LogTable({ logs, loading, onOpen, onAddFilter, selectedI
         sorter: (a, b) => (a.time ?? 0) - (b.time ?? 0),
         defaultSortOrder: 'descend',
         render: (t, log) => (
-          <Tooltip
-            title={
-              <div>
-                <div>Event: {formatTime(log.eventTime)}</div>
-                <div>{formatUtc(log.eventTime)}</div>
-                <div>Received: {formatTime(log.createdAt)}</div>
-              </div>
-            }
-          >
+          <div title={`Event: ${formatTime(log.eventTime)}\n${formatUtc(log.eventTime)}\nReceived: ${formatTime(log.createdAt)}`}>
             <div className="mono">{formatTime(t, 'MM-DD HH:mm:ss.SSS')}</div>
-            <Text type="secondary" style={{ fontSize: 11 }}>
-              {fromNow(t)}
-            </Text>
-          </Tooltip>
+            <div className="cell-sub">{fromNow(t)}</div>
+          </div>
         ),
       },
       {
@@ -72,18 +68,16 @@ export default function LogTable({ logs, loading, onOpen, onAddFilter, selectedI
         width: 340,
         sorter: byString('name'),
         render: (name, log) => (
-          <div className="cell-clip">
-            <Text strong className="mono" ellipsis={{ tooltip: name }} style={{ maxWidth: 320 }}>
+          <>
+            <Clip className="mono" title={name} style={{ fontWeight: 600 }}>
               {name || '—'}
-            </Text>
+            </Clip>
             {log.apiHost && (
-              <div>
-                <Text type="secondary" style={{ fontSize: 11 }}>
-                  {log.apiHost}
-                </Text>
-              </div>
+              <Clip className="cell-sub" title={log.apiHost}>
+                {log.apiHost}
+              </Clip>
             )}
-          </div>
+          </>
         ),
       },
       {
@@ -100,12 +94,14 @@ export default function LogTable({ logs, loading, onOpen, onAddFilter, selectedI
         sorter: byString('errorMessage'),
         render: (msg, log) =>
           msg ? (
-            <Text type={log.errorMessage === 'Canceled' ? 'secondary' : 'danger'} ellipsis={{ tooltip: msg }} style={{ maxWidth: 260 }}>
-              {log.errorCode && log.errorCode !== String(log.apiStatus) ? `[${log.errorCode}] ` : ''}
-              {msg}
-            </Text>
+            <Clip title={msg}>
+              <Text type={log.errorMessage === 'Canceled' ? 'secondary' : 'danger'}>
+                {log.errorCode && log.errorCode !== String(log.apiStatus) ? `[${log.errorCode}] ` : ''}
+                {msg}
+              </Text>
+            </Clip>
           ) : (
-            <Text type="secondary">—</Text>
+            <Dash />
           ),
       },
       {
@@ -114,16 +110,12 @@ export default function LogTable({ logs, loading, onOpen, onAddFilter, selectedI
         width: 185,
         sorter: byString('deviceModel'),
         render: (model, log) => (
-          <div>
-            <Text ellipsis={{ tooltip: model }} style={{ maxWidth: 170 }}>
-              {model || '—'}
-            </Text>
-            <div>
-              <Text type="secondary" style={{ fontSize: 11 }}>
-                {log.platform} {log.osVersion}
-              </Text>
-            </div>
-          </div>
+          <>
+            <Clip title={model}>{model || '—'}</Clip>
+            <Clip className="cell-sub">
+              {log.platform} {log.osVersion}
+            </Clip>
+          </>
         ),
       },
       {
@@ -157,22 +149,21 @@ export default function LogTable({ logs, loading, onOpen, onAddFilter, selectedI
 
   return (
     <Table
+      className="log-table"
       rowKey="id"
       size="small"
+      virtual
       columns={columns}
       dataSource={logs}
       loading={loading}
-      scroll={{ x: 1740 }}
-      sticky
+      scroll={{ x: 1740, y: height }}
       pagination={{
         defaultPageSize: 50,
-        pageSizeOptions: [25, 50, 100, 200, 500],
+        pageSizeOptions: [25, 50, 100, 200, 500, 1000],
         showSizeChanger: true,
-        showTotal: (total, range) => `${range[0]}–${range[1]} of ${total.toLocaleString()}`,
-      }}
-      expandable={{
-        expandedRowRender: (log) => <JsonBlock value={log.raw} maxHeight={420} />,
-        columnWidth: 36,
+        // Pages split the loaded logs only; the server may hold more (see CoverageNotice).
+        showTotal: (total, range) =>
+          `${range[0]}–${range[1]} of ${total.toLocaleString()} ${total < loadedCount ? `(filtered from ${loadedCount.toLocaleString()} loaded)` : 'loaded'}`,
       }}
       onRow={(log) => ({ onClick: () => onOpen(log) })}
       rowClassName={(log) =>

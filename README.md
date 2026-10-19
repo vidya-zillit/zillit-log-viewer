@@ -4,8 +4,9 @@ Next.js (App Router, JavaScript) + Ant Design viewer for the LCW client-log API.
 The frontend and a small backend live in the same project:
 
 - **Frontend** (`src/app/page.js` → `src/components/LogViewerApp.jsx`): the log UI.
-- **Backend** (`src/app/api/logs/route.js`): `GET /api/logs?env=dev|qa|prod&limit=&skip=` forwards the
-  caller's `Authorization` header to `{LCW base}/api/v2/location/log/fetchlog` and relays the response.
+- **Backend** (`src/app/api/logs/route.js`): `GET /api/logs?env=dev|qa|prod&limit=&skip=&…` forwards the
+  caller's `Authorization` header and the server-query params (below) to `{LCW base}/api/v2/location/log/fetchlog`
+  and relays the response. Unknown params are dropped; `limit` is capped at the API's maximum of 1000.
   The browser only talks to this app, so there are no CORS problems and no proxy rules to configure.
 
 ## Run
@@ -19,8 +20,13 @@ npm run build && npm start   # production build
 1. Pick **Dev / QA / Prod** in the environment dropdown.
 2. Paste the auth token (a raw JWT or a full `Bearer …` value both work). The token is decoded locally
    to show `uid`, `pid` and a live expiry countdown — these tokens only live ~5 minutes.
-3. **Fetch latest** loads the newest page. Use **Load more** / **Load all** to page back with `limit` + `skip`,
-   or turn on **Auto-refresh** to pull new logs on an interval.
+3. Optionally set a **Server query** (e.g. *Last 30 days* + a user ID) so only matching logs are downloaded.
+4. **Fetch latest** loads the newest page (*Logs per request* sets its size). Use **Load more** / **Load all** to page
+   back with `limit` + `skip`, or turn on **Auto-refresh** to pull new logs on an interval.
+   With a date range, the button becomes **Fetch range** and loads *every* matching log in one go — 1,000 per request
+   (the API maximum), ignoring *Logs per request*, up to 25,000 logs (`RANGE_LOAD_CAP` in `config/serverQuery.js`).
+   Past the cap, or after Cancel, a notice shows how far back the loaded logs reach and offers Load more / Load all.
+   Every page uses the query the first page was fetched with.
 
 ## Configuration
 
@@ -37,6 +43,19 @@ All three are optional — the defaults above are used when a variable is missin
 
 ## Features
 
+- **Server query** (applied by the API before anything is downloaded, on the next fetch)
+
+  | Param | Filters on | Notes |
+  |---|---|---|
+  | `startDate` / `endDate` | `createdAt` (server receive time) | ISO, both inclusive. "Last N" presets move the end forward on auto-refresh |
+  | `platform`, `category`, `name`, `app_version` | `meta.*` | exact match |
+  | `user_id`, `device_id`, `project_id`, `install_id` | `meta.*` | exact match |
+  | `unique_id` | `unique_id` | a single log |
+  | `api_status` | `meta.api_status` | one exact code, e.g. `500` |
+  | `has_error` | `meta.error_message` | `true` = present, `false` = missing |
+  | `search` | `meta.error_message` | case-insensitive substring; overrides `has_error` |
+
+  The filter panel below still refines whatever is loaded (negation, ranges, device time, facets, grouping).
 - **Filters** (all combine with AND)
   - free-text search across the whole log JSON, plus an "exclude if contains" list
   - time range on event time (device) or received time (server), with presets
@@ -61,6 +80,7 @@ src/
   app/page.js              server page — resolves environments, renders the client app
   app/api/logs/route.js    backend proxy to the LCW fetchlog API
   config/environments.js   env list + base URL resolution (server)
+  config/serverQuery.js    server-query params, presets, resolution (shared by client and backend)
   api/logsApi.js           browser client for /api/logs + error messages
   hooks/useLogs.js         paging, load-all, auto-refresh, import
   utils/logUtils.js        normalising, facets, filters, grouping, formatting

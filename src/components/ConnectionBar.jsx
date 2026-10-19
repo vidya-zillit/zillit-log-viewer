@@ -33,6 +33,8 @@ export default function ConnectionBar({
   onExport,
   onImport,
   exportCount,
+  serverFiltered,
+  rangeMode,
 }) {
   const env = environments.find((e) => e.key === envKey) ?? environments[0];
   const busy = status !== 'idle';
@@ -79,15 +81,17 @@ export default function ConnectionBar({
         </div>
 
         <div>
-          <div className="field-label">Page size</div>
-          <Select value={limit} onChange={onLimitChange} options={LIMIT_OPTIONS} style={{ width: 150 }} />
+          <div className="field-label">Logs per request</div>
+          <Tooltip title={rangeMode ? 'Ignored while a date range is set: Fetch loads the whole range, 1,000 per request' : undefined}>
+            <Select value={limit} onChange={onLimitChange} options={LIMIT_OPTIONS} style={{ width: 150 }} disabled={rangeMode} />
+          </Tooltip>
         </div>
 
         <div>
           <div className="field-label">&nbsp;</div>
           <Space wrap>
             <Button type="primary" icon={<ReloadOutlined />} onClick={onFetch} loading={status === 'loading'} disabled={status === 'loadingAll'}>
-              Fetch latest
+              {rangeMode ? 'Fetch range' : 'Fetch latest'}
             </Button>
             <Button icon={<PlusOutlined />} onClick={onLoadMore} disabled={busy || !canLoadMore}>
               Load more
@@ -130,7 +134,7 @@ export default function ConnectionBar({
           {total !== null && (
             <>
               {' '}
-              of <b>{total.toLocaleString()}</b> on server
+              of <b>{total.toLocaleString()}</b> {serverFiltered ? 'matching the server query' : 'on server'}
             </>
           )}
           {lastFetchedAt && <Text type="secondary"> · updated {fromNow(lastFetchedAt)}</Text>}

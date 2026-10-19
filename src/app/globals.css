@@ -79,11 +79,11 @@ body,
   cursor: pointer;
 }
 
-.row-error > td {
+.row-error > .ant-table-cell {
   background: rgba(255, 77, 79, 0.06);
 }
 
-.row-selected > td {
+.row-selected > .ant-table-cell {
   background: rgba(22, 119, 255, 0.12) !important;
 }
 
@@ -117,4 +117,22 @@ body,
   margin: 0;
   font-size: 11px;
   white-space: pre-wrap;
+}
+
+/* Single-line cell text. Replaces <Typography.Text ellipsis={{ tooltip }}>, which
+   mounts a ResizeObserver per cell — far too costly at 500 rows per page. */
+.clip {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cell-sub {
+  font-size: 11px;
+  opacity: 0.65;
+}
+
+/* Virtual table rows clip their own content, so cells must not stretch them. */
+.log-table .ant-table-cell {
+  overflow: hidden;
 }

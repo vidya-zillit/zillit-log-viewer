@@ -1,3 +1,4 @@
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { Badge, Button, Card, Collapse, DatePicker, Flex, Input, Segmented, Select, Space, Tag, Typography } from 'antd';
 import { FilterOutlined, SearchOutlined, StopOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -5,6 +6,7 @@ import { FACETS, FACET_GROUPS, QUICK_FILTERS } from '../utils/logUtils';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
+const NO_OPTIONS = [];
 
 const rangePresets = () => {
   const now = dayjs();
@@ -27,7 +29,35 @@ function Field({ label, children }) {
   );
 }
 
-function FacetSelect({ facet, state, options, onChange }) {
+/**
+ * Input that applies its value after the user pauses typing, so each keystroke doesn't
+ * re-filter every loaded log. Picks up outside changes (Reset, removing a chip).
+ */
+function DebouncedInput({ value, onChange, delay = 250, ...rest }) {
+  const [local, setLocal] = useState(value);
+  const applied = useRef(value);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  useEffect(() => {
+    if (value === applied.current) return;
+    applied.current = value;
+    setLocal(value);
+  }, [value]);
+
+  useEffect(() => {
+    if (local === applied.current) return undefined;
+    const id = setTimeout(() => {
+      applied.current = local;
+      onChangeRef.current(local);
+    }, delay);
+    return () => clearTimeout(id);
+  }, [local, delay]);
+
+  return <Input {...rest} value={local} onChange={(e) => setLocal(e.target.value)} />;
+}
+
+const FacetSelect = memo(function FacetSelect({ facet, state, options, onChange }) {
   const values = state?.values ?? [];
   const negate = Boolean(state?.negate);
   return (
@@ -39,7 +69,7 @@ function FacetSelect({ facet, state, options, onChange }) {
         <Segmented
           size="small"
           value={negate ? 'not' : 'is'}
-          onChange={(v) => onChange({ negate: v === 'not' })}
+          onChange={(v) => onChange(facet.key, { negate: v === 'not' })}
           options={[
             { label: 'is', value: 'is' },
             { label: 'is not', value: 'not' },
@@ -54,8 +84,8 @@ function FacetSelect({ facet, state, options, onChange }) {
         style={{ width: '100%' }}
         placeholder={`Any ${facet.label.toLowerCase()}`}
         value={values}
-        onChange={(v) => onChange({ values: v })}
-        options={options.map((o) => ({ value: o.value, label: o.value, count: o.count }))}
+        onChange={(v) => onChange(facet.key, { values: v })}
+        options={options}
         optionRender={(opt) => (
           <Flex justify="space-between" gap={8}>
             <span className="opt-label" title={opt.data.value}>
@@ -71,12 +101,15 @@ function FacetSelect({ facet, state, options, onChange }) {
       />
     </div>
   );
-}
+});
 
 export default function FilterPanel({ filters, onChange, facetOptions, activeCount, onReset }) {
   const set = (patch) => onChange((f) => ({ ...f, ...patch }));
-  const setFacet = (key, patch) =>
-    onChange((f) => ({ ...f, facets: { ...f.facets, [key]: { values: [], negate: false, ...f.facets[key], ...patch } } }));
+  const setFacet = useCallback(
+    (key, patch) =>
+      onChange((f) => ({ ...f, facets: { ...f.facets, [key]: { values: [], negate: false, ...f.facets[key], ...patch } } })),
+    [onChange],
+  );
   const toggleQuick = (key, checked) =>
     onChange((f) => ({ ...f, quick: checked ? [...f.quick, key] : f.quick.filter((k) => k !== key) }));
 
@@ -100,8 +133,8 @@ export default function FilterPanel({ filters, onChange, facetOptions, activeCou
               key={facet.key}
               facet={facet}
               state={filters.facets[facet.key]}
-              options={facetOptions[facet.key] ?? []}
-              onChange={(patch) => setFacet(facet.key, patch)}
+              options={facetOptions[facet.key] ?? NO_OPTIONS}
+              onChange={setFacet}
             />
           ))}
         </Space>
@@ -128,22 +161,22 @@ export default function FilterPanel({ filters, onChange, facetOptions, activeCou
     >
       <Space direction="vertical" style={{ width: '100%' }} size={12}>
         <Field label="Search (matches anywhere in the log JSON)">
-          <Input
+          <DebouncedInput
             allowClear
             prefix={<SearchOutlined />}
             placeholder="frontend_disabled, 6aabcdf2…, /ws"
             value={filters.search}
-            onChange={(e) => set({ search: e.target.value })}
+            onChange={(search) => set({ search })}
           />
         </Field>
 
         <Field label="Exclude if contains (comma-separated)">
-          <Input
+          <DebouncedInput
             allowClear
             prefix={<StopOutlined />}
             placeholder="Canceled, /ws"
             value={filters.exclude}
-            onChange={(e) => set({ exclude: e.target.value })}
+            onChange={(exclude) => set({ exclude })}
           />
         </Field>
 

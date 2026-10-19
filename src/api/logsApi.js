@@ -8,11 +8,12 @@ export class ApiError extends Error {
 
 /**
  * Calls this app's backend (/api/logs), which forwards to
- * {LCW base}/api/v2/location/log/fetchlog?limit=&skip= for the chosen environment.
+ * {LCW base}/api/v2/location/log/fetchlog?limit=&skip=&… for the chosen environment.
+ * `query` holds server-side filters (see config/serverQuery.js resolveServerQuery).
  * Response: { status: 1, data: { total, limit, skip, logs: [...] } }
  */
-export async function fetchLogPage({ envKey, token, limit, skip, signal }) {
-  const params = new URLSearchParams({ env: envKey, limit: String(limit), skip: String(skip) });
+export async function fetchLogPage({ envKey, token, limit, skip, query = {}, signal }) {
+  const params = new URLSearchParams({ ...query, env: envKey, limit: String(limit), skip: String(skip) });
   const url = `/api/logs?${params}`;
 
   const res = await fetch(url, {
